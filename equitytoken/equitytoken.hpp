@@ -30,12 +30,15 @@ class equitytoken : public contract
                   string memo);
 
     // @abi action
-    void addconfig (const uint16_t  earnings_rate100,
+    void setconfig (const uint16_t  earnings_rate100,
                     const uint8_t   equity_symbol_precision,
                     const string    equity_symbol,
                     const uint8_t   reward_symbol_precision,
                     const string    reward_symbol,
-                    const account_name  rewards_contract    );
+                    const account_name  rewards_contract);
+  
+    // @abi action
+    void setearnrate (const uint16_t  earnings_ratex100);
 
     // @abi action 
     void update (const account_name    account);
@@ -51,10 +54,9 @@ class equitytoken : public contract
 
     void transferReceived(const currency::transfer &transfer, const account_name code);
 
-
   private:
 
-    const uint128_t       SCALER = 100000000000000;
+    const uint128_t       SCALER = 1000000000000000000;
 
     // @abi table configs i64
     struct config
@@ -66,10 +68,9 @@ class equitytoken : public contract
         uint128_t       scaled_earnings_per_token;
         uint128_t       scaled_remainder;
         uint16_t        earnings_ratex100;
+        //account_name    xferqueue;
      
         uint64_t primary_key() const { return config_id; }
-        EOSLIB_SERIALIZE(config, (config_id)(equity_symbol)(rewards_contract)(rewards_symbol)
-                                    (scaled_earnings_per_token)(scaled_remainder)(earnings_ratex100))
     };
 
     typedef eosio::multi_index<N(configs), config> config_table;
@@ -146,9 +147,6 @@ class equitytoken : public contract
         asset quantity;
         string memo;
     };
-
-   
-
 };
 
 asset equitytoken::get_supply(symbol_name sym) const

@@ -4,6 +4,7 @@
 using namespace std;
 using namespace eosio;
 
+
 void equitytoken::create(account_name issuer,
                        asset maximum_supply)
 {
@@ -126,7 +127,7 @@ void equitytoken::add_balance(account_name owner, asset value, account_name ram_
     }
 }
 
-void equitytoken::addconfig (const uint16_t earnings_ratex100,
+void equitytoken::setconfig (const uint16_t earnings_ratex100,
                             const uint8_t   equity_symbol_precision,
                             const string    equity_symbol,
                             const uint8_t   reward_symbol_precision, 
@@ -135,21 +136,24 @@ void equitytoken::addconfig (const uint16_t earnings_ratex100,
 
     config_table c_t (_self, _self);
     auto c_itr = c_t.begin();
+    eosio_assert (c_itr == c_t.end(), "Configuration has already been set.");
 
-    if (c_itr == c_t.end()) {
-        c_t.emplace (_self, [&](auto &c) {
-            c.earnings_ratex100         = earnings_ratex100;
-            c.rewards_symbol            = string_to_symbol (reward_symbol_precision, reward_symbol.c_str());
-            c.equity_symbol             = string_to_symbol (equity_symbol_precision, equity_symbol.c_str());
-            c.scaled_earnings_per_token = 0;
-            c.rewards_contract          = rewards_contract;
-        });
-    }
-    else {
-        c_t.modify (c_itr, _self, [&](auto &c) {
-            c.earnings_ratex100     = earnings_ratex100;
-        });
-    }
+    c_t.emplace (_self, [&](auto &c) {
+        c.earnings_ratex100         = earnings_ratex100;
+        c.rewards_symbol            = string_to_symbol (reward_symbol_precision, reward_symbol.c_str());
+        c.equity_symbol             = string_to_symbol (equity_symbol_precision, equity_symbol.c_str());
+        c.scaled_earnings_per_token = 0;
+        c.rewards_contract          = rewards_contract;
+    });    
+}
+
+void equitytoken::setearnrate (const uint16_t  earnings_ratex100) {
+    config_table c_t (_self, _self);
+    auto c_itr = c_t.begin();
+    eosio_assert (c_itr != c_t.end(), "Configuration must be set.");
+    c_t.modify (c_itr, _self, [&](auto &c) {
+        c.earnings_ratex100     = earnings_ratex100;
+    });
 }
 
 
@@ -166,7 +170,7 @@ void equitytoken::update (const account_name account) {
     }
 
     uint128_t    owed   = c_itr->scaled_earnings_per_token - a_itr->scaled_earnings_credited;
-    
+
     acnts.modify (a_itr, _self, [&](auto &a) {
         a.scaled_earnings_balance += (a.balance.amount)  * owed;
         a.scaled_earnings_credited  = c_itr->scaled_earnings_per_token; 
@@ -188,20 +192,19 @@ void equitytoken::withrewards (const account_name account) {
     acnts.modify (a_itr, _self, [&](auto &a) {
         a.scaled_earnings_balance %= SCALER;
     });
-    
-    payreward (_self, account, asset { static_cast<int64_t>(amount), c_itr->rewards_symbol}, "Reward from BCDE Holdings");
+
+    payreward (_self, account, asset { static_cast<int64_t>(amount), c_itr->rewards_symbol}, "Reward from Equity Holdings");
 }
 
 
 void equitytoken::apply(const account_name contract, const account_name act)
 {
-
     if (contract == _self) {
         auto &thiscontract = *this;
 
         switch (act)
         {
-            EOSIO_API(equitytoken, (create)(issue)(transfer)(addconfig)(update)(withrewards))
+            EOSIO_API(equitytoken, (create)(issue)(transfer)(setconfig)(setearnrate)(update)(withrewards))
         };
     } else {
 
@@ -210,8 +213,7 @@ void equitytoken::apply(const account_name contract, const account_name act)
             transferReceived(unpack_action_data<currency::transfer>(), contract);
             return;
         }
-    }
-    
+    }    
 }
 
 void equitytoken::transferReceived(const currency::transfer &transfer, const account_name code)
@@ -237,17 +239,17 @@ void equitytoken::transferReceived(const currency::transfer &transfer, const acc
     auto s_itr = s_t.find (c_itr->equity_symbol.name());
     eosio_assert (s_itr != s_t.end(), "Equity token symbol is not found in stat table.");
 
-    uint128_t   available = (c_itr->earnings_ratex100 * transfer.quantity.amount * SCALER / 10000 / 10000 ) + c_itr->scaled_remainder;
+    uint128_t   available = (c_itr->earnings_ratex100 * transfer.quantity.amount * SCALER / 10000 / pow(10,transfer.quantity.symbol.precision()) ) + c_itr->scaled_remainder;
 
     c_t.modify (c_itr, _self, [&](auto &c) {
-        c.scaled_earnings_per_token     += available / (s_itr->supply.amount / 10000);
-        c.scaled_remainder              = available % (s_itr->supply.amount / 10000);
+        uint128_t supply_amount = s_itr->supply.amount / pow (10, transfer.quantity.symbol.precision());
+        c.scaled_earnings_per_token     += available / supply_amount; 
+        c.scaled_remainder              = available % supply_amount;
      });
 }
 
 extern "C"
 {
-    //using namespace bay;
     using namespace eosio;
 
     void apply(uint64_t receiver, uint64_t code, uint64_t action)
