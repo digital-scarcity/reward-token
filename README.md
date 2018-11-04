@@ -9,7 +9,7 @@ docker-compose build
 docker-compose up -d
 
 # To unlock wallet (use your password)
-docker exec -it rewardtoken_nodeosd_1 /opt/eosio/bin/cleos -u http://nodeosd:8888 --wallet-url http://keosd:8900 wallet unlock --password PW5K6tHhBdjD7JGK4jwJKNnduamH3GfwmgJjnkmGvSPokKtanDrt3
+docker exec -it rewardtoken_nodeosd_1 /opt/eosio/bin/cleos -u http://nodeosd:8888 --wallet-url http://keosd:8900 wallet unlock --password 
 
 # To view live logs
 docker logs -f rewardtoken_nodeosd_1
